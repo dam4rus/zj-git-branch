@@ -109,18 +109,30 @@ impl Git {
         }
     }
 
-    fn request_branches(&self) {
+    fn list_branches(&self) {
+        let cmd = &["git", "branch"];
+        let context = BTreeMap::from([(String::from("command"), String::from("list"))]);
         match &self.cwd {
-            Some(cwd) => run_command_with_env_variables_and_cwd(
-                &["git", "branch"],
-                BTreeMap::new(),
-                cwd.clone(),
-                BTreeMap::from([(String::from("command"), String::from("list"))]),
-            ),
-            None => run_command(
-                &["git", "branch"],
-                BTreeMap::from([(String::from("command"), String::from("list"))]),
-            ),
+            Some(cwd) => {
+                run_command_with_env_variables_and_cwd(cmd, BTreeMap::new(), cwd.clone(), context)
+            }
+            None => run_command(cmd, context),
+        }
+    }
+
+    fn delete_branch(&self, branch_name: &str, force_delete: bool) {
+        let cmd = &[
+            "git",
+            "branch",
+            if force_delete { "-D" } else { "-d" },
+            &branch_name,
+        ];
+        let context = BTreeMap::from([(String::from("command"), String::from("delete"))]);
+        match &self.cwd {
+            Some(cwd) => {
+                run_command_with_env_variables_and_cwd(cmd, BTreeMap::new(), cwd.clone(), context)
+            }
+            None => run_command(cmd, context),
         }
     }
 
@@ -151,6 +163,31 @@ impl Git {
             }
         }
     }
+
+    fn render_branch_list(&mut self, cols: usize, rows: usize) {
+        let current_view = self.mut_current_view();
+        let list_items: Vec<NestedListItem> = current_view
+            .branches
+            .iter()
+            .enumerate()
+            .skip(current_view.scroll_offset)
+            .map(|(i, branch)| {
+                let list_item = NestedListItem::new(branch.name.clone());
+                let list_item = if branch.current {
+                    list_item.color_range(2, 0..)
+                } else {
+                    list_item
+                };
+                if current_view.selected_index == i {
+                    list_item.selected()
+                } else {
+                    list_item
+                }
+            })
+            .collect();
+
+        print_nested_list_with_coordinates(list_items, 0, 1, Some(cols), Some(rows - 3));
+    }
 }
 
 impl ZellijPlugin for Git {
@@ -168,7 +205,7 @@ impl ZellijPlugin for Git {
     fn update(&mut self, event: Event) -> bool {
         match event {
             Event::Visible(true) => {
-                self.request_branches();
+                self.list_branches();
                 true
             }
             Event::RunCommandResult(Some(0), stdout, _stderr, context) => {
@@ -201,8 +238,8 @@ impl ZellijPlugin for Git {
                         }
                         true
                     }
-                    Some("switch") | Some("create") => {
-                        self.request_branches();
+                    Some("switch") | Some("create") | Some("delete") => {
+                        self.list_branches();
                         true
                     }
                     _ => false,
@@ -279,42 +316,47 @@ impl ZellijPlugin for Git {
             Event::Key(KeyWithModifier {
                 bare_key: BareKey::Char(c),
                 key_modifiers,
-            }) => {
-                if key_modifiers.contains(&KeyModifier::Ctrl) {
-                    match c {
-                        'c' => {
-                            match &self.cwd {
-                                Some(cwd) => run_command_with_env_variables_and_cwd(
-                                    &["git", "checkout", "-b", &self.input],
-                                    BTreeMap::new(),
-                                    cwd.clone(),
-                                    BTreeMap::from([(
-                                        String::from("command"),
-                                        String::from("create"),
-                                    )]),
-                                ),
-                                None => run_command(
-                                    &["git", "checkout", "-b", &self.input],
-                                    BTreeMap::from([(
-                                        String::from("command"),
-                                        String::from("create"),
-                                    )]),
-                                ),
-                            }
-
-                            true
-                        }
-                        'r' => {
-                            self.request_branches();
-                            true
-                        }
-                        _ => false,
+            }) if key_modifiers.contains(&KeyModifier::Ctrl) => match c {
+                'c' => {
+                    match &self.cwd {
+                        Some(cwd) => run_command_with_env_variables_and_cwd(
+                            &["git", "checkout", "-b", &self.input],
+                            BTreeMap::new(),
+                            cwd.clone(),
+                            BTreeMap::from([(String::from("command"), String::from("create"))]),
+                        ),
+                        None => run_command(
+                            &["git", "checkout", "-b", &self.input],
+                            BTreeMap::from([(String::from("command"), String::from("create"))]),
+                        ),
                     }
-                } else {
-                    self.input.push(c);
-                    self.update_filtered_view();
+
                     true
                 }
+                'r' => {
+                    self.list_branches();
+                    true
+                }
+                'd' => {
+                    if let Some(selected_branch) = self.current_view().selected_branch() {
+                        self.delete_branch(
+                            &selected_branch.name,
+                            key_modifiers.contains(&KeyModifier::Alt),
+                        );
+                        true
+                    } else {
+                        false
+                    }
+                }
+                _ => false,
+            },
+            Event::Key(KeyWithModifier {
+                bare_key: BareKey::Char(c),
+                ..
+            }) => {
+                self.input.push(c);
+                self.update_filtered_view();
+                true
             }
             _ => false,
         }
@@ -325,7 +367,7 @@ impl ZellijPlugin for Git {
             if let Some(payload) = pipe_message.payload {
                 let cwd = PathBuf::from(payload);
                 self.cwd = Some(cwd.clone());
-                self.request_branches();
+                self.list_branches();
                 return true;
             }
         }
@@ -336,53 +378,20 @@ impl ZellijPlugin for Git {
         self.render_area = Some(RenderArea::new(rows));
         if !self.inited {
             self.inited = true;
-            self.request_branches();
+            self.list_branches();
             return;
         }
 
         print_text_with_coordinates(
-            Text::new(format!("Branch: {}█", self.input.clone())),
+            Text::new(format!("Branch: {}|", self.input.clone())),
             0,
             0,
             None,
             None,
         );
 
-        let current_view = self.mut_current_view();
-        let list_items: Vec<NestedListItem> = current_view
-            .branches
-            .iter()
-            .enumerate()
-            .skip(current_view.scroll_offset)
-            .map(|(i, branch)| {
-                let list_item = NestedListItem::new(branch.name.clone());
-                let list_item = if branch.current {
-                    list_item.color_range(2, 0..)
-                } else {
-                    list_item
-                };
-                if current_view.selected_index == i {
-                    list_item.selected()
-                } else {
-                    list_item
-                }
-            })
-            .collect();
-
-        print_nested_list_with_coordinates(list_items, 0, 1, Some(cols), Some(rows - 3));
-
-        {
-            let mut x = 0;
-            let y = rows - 2;
-            let text = "Ctrl +";
-            print_ribbon_with_coordinates(Text::new(text), x, y, None, None);
-            x += text.len() + 4;
-            let text = "<c> CREATE";
-            print_ribbon_with_coordinates(Text::new(text), x, y, None, None);
-            x += text.len() + 4;
-            let text = "<r> REFRESH";
-            print_ribbon_with_coordinates(Text::new(text), x, y, None, None);
-        }
+        self.render_branch_list(cols, rows);
+        render_help(rows);
 
         if let Some(error_message) = &self.message {
             if let Some(first_line) = error_message.lines().next() {
@@ -390,6 +399,25 @@ impl ZellijPlugin for Git {
             }
         }
     }
+}
+
+fn render_help(rows: usize) {
+    let mut x = 0;
+    let y = rows - 2;
+    let text = "Ctrl + ";
+    print_text_with_coordinates(Text::new(text), x, y, None, None);
+    x += text.len();
+    let text = "<c> Create";
+    print_ribbon_with_coordinates(Text::new(text), x, y, None, None);
+    x += text.len() + 4;
+    let text = "<r> Refresh";
+    print_ribbon_with_coordinates(Text::new(text), x, y, None, None);
+    x += text.len() + 4;
+    let text = "<d> Delete";
+    print_ribbon_with_coordinates(Text::new(text), x, y, None, None);
+    x += text.len() + 4;
+    let text = "<Alt + d> Force delete";
+    print_ribbon_with_coordinates(Text::new(text), x, y, None, None);
 }
 
 register_plugin!(Git);
