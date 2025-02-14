@@ -90,7 +90,7 @@ struct Git {
     view: BranchesView,
     filtered_view: Option<BranchesView>,
     render_area: Option<RenderArea>,
-    message: Option<String>,
+    error_message: Option<String>,
     input: String,
 }
 
@@ -194,20 +194,12 @@ impl ZellijPlugin for Git {
     fn load(&mut self, _configuration: BTreeMap<String, String>) {
         let plugin_ids = get_plugin_ids();
         self.cwd = Some(plugin_ids.initial_cwd.clone());
-        subscribe(&[
-            EventType::Key,
-            EventType::RunCommandResult,
-            EventType::Visible,
-        ]);
+        subscribe(&[EventType::Key, EventType::RunCommandResult]);
         request_permission(&[PermissionType::RunCommands]);
     }
 
     fn update(&mut self, event: Event) -> bool {
         match event {
-            Event::Visible(true) => {
-                self.list_branches();
-                true
-            }
             Event::RunCommandResult(Some(0), stdout, _stderr, context) => {
                 match context.get("command").map(String::as_str) {
                     Some("list") => {
@@ -232,9 +224,9 @@ impl ZellijPlugin for Git {
                                     self.update_filtered_view();
                                 }
 
-                                self.message = None;
+                                self.error_message = None;
                             }
-                            Err(err) => self.message = Some(err),
+                            Err(err) => self.error_message = Some(err),
                         }
                         true
                     }
@@ -246,7 +238,11 @@ impl ZellijPlugin for Git {
                 }
             }
             Event::RunCommandResult(Some(_err_code), _stdout, stderr, _context) => {
-                self.message = Some(String::from_utf8_lossy(&stderr).to_string());
+                self.error_message = Some(String::from_utf8_lossy(&stderr).to_string());
+                true
+            }
+            Event::Key(..) if self.error_message.is_some() => {
+                self.error_message = None;
                 true
             }
             Event::Key(KeyWithModifier {
@@ -382,6 +378,14 @@ impl ZellijPlugin for Git {
             return;
         }
 
+        if let Some(message) = &self.error_message {
+            print_text_with_coordinates(Text::new("ERROR").color_range(3, ..), 0, 0, None, None);
+            for (y, line) in message.lines().enumerate() {
+                print_text_with_coordinates(Text::new(line), 0, y + 1, None, None);
+            }
+            return;
+        }
+
         print_text_with_coordinates(
             Text::new(format!("Branch: {}|", self.input.clone())),
             0,
@@ -392,11 +396,14 @@ impl ZellijPlugin for Git {
 
         self.render_branch_list(cols, rows);
         render_help(rows);
-
-        if let Some(error_message) = &self.message {
-            if let Some(first_line) = error_message.lines().next() {
-                print_text_with_coordinates(Text::new(first_line), 0, rows - 1, None, None);
-            }
+        if let Some(cwd) = &self.cwd {
+            print_text_with_coordinates(
+                Text::new(cwd.to_string_lossy().to_string()),
+                0,
+                rows - 1,
+                None,
+                None,
+            );
         }
     }
 }
