@@ -310,7 +310,7 @@ impl ZellijPlugin for Git {
                 bare_key: BareKey::Esc,
                 ..
             }) => {
-                hide_self();
+                close_self();
                 true
             }
             Event::Key(KeyWithModifier {
