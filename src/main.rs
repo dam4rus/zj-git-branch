@@ -335,10 +335,15 @@ impl ZellijPlugin for Git {
                 }
                 'd' => {
                     if let Some(selected_branch) = self.current_view().selected_branch() {
-                        self.delete_branch(
-                            &selected_branch.name,
-                            key_modifiers.contains(&KeyModifier::Alt),
-                        );
+                        self.delete_branch(&selected_branch.name, false);
+                        true
+                    } else {
+                        false
+                    }
+                }
+                'x' => {
+                    if let Some(selected_branch) = self.current_view().selected_branch() {
+                        self.delete_branch(&selected_branch.name, true);
                         true
                     } else {
                         false
@@ -423,7 +428,7 @@ fn render_help(rows: usize) {
     let text = "<d> Delete";
     print_ribbon_with_coordinates(Text::new(text), x, y, None, None);
     x += text.len() + 4;
-    let text = "<Alt + d> Force delete";
+    let text = "<x> Force delete";
     print_ribbon_with_coordinates(Text::new(text), x, y, None, None);
 }
 
