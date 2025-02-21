@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, io::BufRead, path::PathBuf};
+use std::{cmp::Ordering, collections::BTreeMap, io::BufRead, path::PathBuf};
 
 use zellij_tile::{prelude::*, shim::subscribe, ZellijPlugin};
 
@@ -64,13 +64,17 @@ impl BranchesView {
     }
 
     fn offset_selected_index(&mut self, offset: isize) {
-        if offset > 0 {
-            self.selected_index = usize::min(
-                self.selected_index + offset as usize,
-                self.branches.len().saturating_sub(1),
-            );
-        } else if offset < 0 {
-            self.selected_index = self.selected_index.saturating_sub(offset.abs() as usize);
+        match offset.cmp(&0) {
+            Ordering::Greater => {
+                self.selected_index = usize::min(
+                    self.selected_index + offset as usize,
+                    self.branches.len().saturating_sub(1),
+                );
+            }
+            Ordering::Less => {
+                self.selected_index = self.selected_index.saturating_sub(offset.unsigned_abs());
+            }
+            Ordering::Equal => (),
         }
     }
 
@@ -125,7 +129,7 @@ impl Git {
             "git",
             "branch",
             if force_delete { "-D" } else { "-d" },
-            &branch_name,
+            branch_name,
         ];
         let context = BTreeMap::from([(String::from("command"), String::from("delete"))]);
         match &self.cwd {
@@ -205,7 +209,7 @@ impl ZellijPlugin for Git {
                     Some("list") => {
                         let branches: Result<Vec<Branch>, String> = stdout
                             .lines()
-                            .filter_map(|line| line.ok())
+                            .map_while(Result::ok)
                             .map(|line| Branch::try_from(line.as_str()))
                             .collect();
 
