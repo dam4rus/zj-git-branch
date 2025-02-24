@@ -113,33 +113,6 @@ impl Git {
         }
     }
 
-    fn list_branches(&self) {
-        let cmd = &["git", "branch"];
-        let context = BTreeMap::from([(String::from("command"), String::from("list"))]);
-        match &self.cwd {
-            Some(cwd) => {
-                run_command_with_env_variables_and_cwd(cmd, BTreeMap::new(), cwd.clone(), context)
-            }
-            None => run_command(cmd, context),
-        }
-    }
-
-    fn delete_branch(&self, branch_name: &str, force_delete: bool) {
-        let cmd = &[
-            "git",
-            "branch",
-            if force_delete { "-D" } else { "-d" },
-            branch_name,
-        ];
-        let context = BTreeMap::from([(String::from("command"), String::from("delete"))]);
-        match &self.cwd {
-            Some(cwd) => {
-                run_command_with_env_variables_and_cwd(cmd, BTreeMap::new(), cwd.clone(), context)
-            }
-            None => run_command(cmd, context),
-        }
-    }
-
     fn update_filtered_view(&mut self) {
         let visible_branches: Vec<Branch> = self
             .view
@@ -192,6 +165,137 @@ impl Git {
 
         print_nested_list_with_coordinates(list_items, 0, 1, Some(cols), Some(rows - 3));
     }
+
+    fn successful_command_update(
+        &mut self,
+        context: BTreeMap<String, String>,
+        stdout: Vec<u8>,
+    ) -> bool {
+        match context.get("command").map(String::as_str) {
+            Some("list") => {
+                let branches: Result<Vec<Branch>, String> = stdout
+                    .lines()
+                    .map_while(Result::ok)
+                    .map(|line| Branch::try_from(line.as_str()))
+                    .collect();
+
+                match branches {
+                    Ok(branches) => {
+                        self.view.selected_index = branches
+                            .iter()
+                            .position(|branch| branch.current)
+                            .unwrap_or(0);
+                        self.view.branches = branches;
+                        if let Some(render_area) = self.render_area {
+                            self.view.scroll_selected_to_view(render_area);
+                        }
+
+                        if !self.input.is_empty() {
+                            self.update_filtered_view();
+                        }
+
+                        self.error_message = None;
+                    }
+                    Err(err) => self.error_message = Some(err),
+                }
+                true
+            }
+            Some("switch") | Some("create") | Some("delete") => {
+                self.list_branches();
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn select_down(&mut self) {
+        let render_area = self.render_area;
+        let current_view = self.mut_current_view();
+        current_view.offset_selected_index(1);
+        if let Some(render_area) = render_area {
+            current_view.scroll_selected_to_view(render_area);
+        }
+    }
+
+    fn select_up(&mut self) {
+        let render_area = self.render_area;
+        let current_view = self.mut_current_view();
+        current_view.offset_selected_index(-1);
+        if let Some(render_area) = render_area {
+            current_view.scroll_selected_to_view(render_area);
+        }
+    }
+
+    fn list_branches(&self) {
+        let cmd = &["git", "branch"];
+        let context = BTreeMap::from([(String::from("command"), String::from("list"))]);
+        match &self.cwd {
+            Some(cwd) => {
+                run_command_with_env_variables_and_cwd(cmd, BTreeMap::new(), cwd.clone(), context)
+            }
+            None => run_command(cmd, context),
+        }
+    }
+
+    fn delete_branch(&self, branch_name: &str, force_delete: bool) {
+        let cmd = &[
+            "git",
+            "branch",
+            if force_delete { "-D" } else { "-d" },
+            branch_name,
+        ];
+        let context = BTreeMap::from([(String::from("command"), String::from("delete"))]);
+        match &self.cwd {
+            Some(cwd) => {
+                run_command_with_env_variables_and_cwd(cmd, BTreeMap::new(), cwd.clone(), context)
+            }
+            None => run_command(cmd, context),
+        }
+    }
+
+    fn switch_to_branch(&self, branch: &Branch) {
+        match &self.cwd {
+            Some(cwd) => run_command_with_env_variables_and_cwd(
+                &["git", "switch", &branch.name],
+                BTreeMap::new(),
+                cwd.clone(),
+                BTreeMap::from([(String::from("command"), String::from("switch"))]),
+            ),
+            None => run_command(
+                &["git", "switch", &branch.name],
+                BTreeMap::from([(String::from("command"), String::from("switch"))]),
+            ),
+        }
+    }
+
+    fn create_branch(&mut self) {
+        match &self.cwd {
+            Some(cwd) => run_command_with_env_variables_and_cwd(
+                &["git", "checkout", "-b", &self.input],
+                BTreeMap::new(),
+                cwd.clone(),
+                BTreeMap::from([(String::from("command"), String::from("create"))]),
+            ),
+            None => run_command(
+                &["git", "checkout", "-b", &self.input],
+                BTreeMap::from([(String::from("command"), String::from("create"))]),
+            ),
+        }
+    }
+
+    fn push_to_input(&mut self, c: char) {
+        self.input.push(c);
+        self.update_filtered_view();
+    }
+
+    fn pop_from_input(&mut self) {
+        self.input.pop();
+        if self.input.is_empty() {
+            self.filtered_view = None;
+        } else {
+            self.update_filtered_view();
+        }
+    }
 }
 
 impl ZellijPlugin for Git {
@@ -205,41 +309,7 @@ impl ZellijPlugin for Git {
     fn update(&mut self, event: Event) -> bool {
         match event {
             Event::RunCommandResult(Some(0), stdout, _stderr, context) => {
-                match context.get("command").map(String::as_str) {
-                    Some("list") => {
-                        let branches: Result<Vec<Branch>, String> = stdout
-                            .lines()
-                            .map_while(Result::ok)
-                            .map(|line| Branch::try_from(line.as_str()))
-                            .collect();
-
-                        match branches {
-                            Ok(branches) => {
-                                self.view.selected_index = branches
-                                    .iter()
-                                    .position(|branch| branch.current)
-                                    .unwrap_or(0);
-                                self.view.branches = branches;
-                                if let Some(render_area) = self.render_area {
-                                    self.view.scroll_selected_to_view(render_area);
-                                }
-
-                                if !self.input.is_empty() {
-                                    self.update_filtered_view();
-                                }
-
-                                self.error_message = None;
-                            }
-                            Err(err) => self.error_message = Some(err),
-                        }
-                        true
-                    }
-                    Some("switch") | Some("create") | Some("delete") => {
-                        self.list_branches();
-                        true
-                    }
-                    _ => false,
-                }
+                self.successful_command_update(context, stdout)
             }
             Event::RunCommandResult(Some(_err_code), _stdout, stderr, _context) => {
                 self.error_message = Some(String::from_utf8_lossy(&stderr).to_string());
@@ -253,24 +323,14 @@ impl ZellijPlugin for Git {
                 bare_key: BareKey::Down,
                 ..
             }) => {
-                let render_area = self.render_area;
-                let current_view = self.mut_current_view();
-                current_view.offset_selected_index(1);
-                if let Some(render_area) = render_area {
-                    current_view.scroll_selected_to_view(render_area);
-                }
+                self.select_down();
                 true
             }
             Event::Key(KeyWithModifier {
                 bare_key: BareKey::Up,
                 ..
             }) => {
-                let render_area = self.render_area;
-                let current_view = self.mut_current_view();
-                current_view.offset_selected_index(-1);
-                if let Some(render_area) = render_area {
-                    current_view.scroll_selected_to_view(render_area);
-                }
+                self.select_up();
                 true
             }
             Event::Key(KeyWithModifier {
@@ -278,18 +338,7 @@ impl ZellijPlugin for Git {
                 ..
             }) => match self.current_view().selected_branch() {
                 Some(branch) => {
-                    match &self.cwd {
-                        Some(cwd) => run_command_with_env_variables_and_cwd(
-                            &["git", "switch", &branch.name],
-                            BTreeMap::new(),
-                            cwd.clone(),
-                            BTreeMap::from([(String::from("command"), String::from("switch"))]),
-                        ),
-                        None => run_command(
-                            &["git", "switch", &branch.name],
-                            BTreeMap::from([(String::from("command"), String::from("switch"))]),
-                        ),
-                    }
+                    self.switch_to_branch(branch);
                     true
                 }
                 None => false,
@@ -298,12 +347,7 @@ impl ZellijPlugin for Git {
                 bare_key: BareKey::Backspace,
                 ..
             }) => {
-                self.input.pop();
-                if self.input.is_empty() {
-                    self.filtered_view = None;
-                } else {
-                    self.update_filtered_view();
-                }
+                self.pop_from_input();
                 true
             }
             Event::Key(KeyWithModifier {
@@ -318,19 +362,7 @@ impl ZellijPlugin for Git {
                 key_modifiers,
             }) if key_modifiers.contains(&KeyModifier::Ctrl) => match c {
                 'c' => {
-                    match &self.cwd {
-                        Some(cwd) => run_command_with_env_variables_and_cwd(
-                            &["git", "checkout", "-b", &self.input],
-                            BTreeMap::new(),
-                            cwd.clone(),
-                            BTreeMap::from([(String::from("command"), String::from("create"))]),
-                        ),
-                        None => run_command(
-                            &["git", "checkout", "-b", &self.input],
-                            BTreeMap::from([(String::from("command"), String::from("create"))]),
-                        ),
-                    }
-
+                    self.create_branch();
                     true
                 }
                 'r' => {
@@ -359,8 +391,7 @@ impl ZellijPlugin for Git {
                 bare_key: BareKey::Char(c),
                 ..
             }) => {
-                self.input.push(c);
-                self.update_filtered_view();
+                self.push_to_input(c);
                 true
             }
             _ => false,
