@@ -36,7 +36,7 @@ impl RenderArea {
     }
 
     fn branches_view_height(&self) -> usize {
-        self.height - 4
+        self.height - 7
     }
 }
 
@@ -165,7 +165,7 @@ impl Git {
             })
             .collect();
 
-        print_nested_list_with_coordinates(list_items, 0, 1, Some(cols), Some(rows - 3));
+        print_nested_list_with_coordinates(list_items, 1, 3, Some(cols - 3), Some(rows - 6));
     }
 
     fn successful_command_update(
@@ -316,28 +316,48 @@ impl Git {
         let mut x = 0;
         let y = rows - 2;
 
-        let text = "Ctrl + ";
+        let text = "Help: ";
         print_text_with_coordinates(Text::new(text), x, y, None, None);
 
-        x += text.len();
-        let text = "<c> Create";
-        print_ribbon_with_coordinates(Text::new(text), x, y, None, None);
+        x += text.chars().count();
+        let text = "<Ctrl-r>";
+        print_text_with_coordinates(Text::new(text).color_range(3, 0..), x, y, None, None);
 
-        x += text.len() + 4;
-        let text = "<r> Refresh";
-        print_ribbon_with_coordinates(Text::new(text), x, y, None, None);
+        x += text.chars().count();
+        let text = " - Refresh, ";
+        print_text_with_coordinates(Text::new(text), x, y, None, None);
 
-        x += text.len() + 4;
-        let text = "<d> Delete";
-        print_ribbon_with_coordinates(Text::new(text), x, y, None, None);
+        x += text.chars().count();
+        let text = "<Ctrl-c>";
+        print_text_with_coordinates(Text::new(text).color_range(3, 0..), x, y, None, None);
 
-        x += text.len() + 4;
-        let text = "<x> Force delete";
-        print_ribbon_with_coordinates(Text::new(text), x, y, None, None);
+        x += text.chars().count();
+        let text = " - Create, ";
+        print_text_with_coordinates(Text::new(text), x, y, None, None);
 
-        x += text.len() + 4;
-        let text = "<l> Log";
-        print_ribbon_with_coordinates(Text::new(text), x, y, None, None);
+        x += text.chars().count();
+        let text = "<Ctrl-d>";
+        print_text_with_coordinates(Text::new(text).color_range(3, 0..), x, y, None, None);
+
+        x += text.chars().count();
+        let text = " - Delete, ";
+        print_text_with_coordinates(Text::new(text), x, y, None, None);
+
+        x += text.chars().count();
+        let text = "<Ctrl-x>";
+        print_text_with_coordinates(Text::new(text).color_range(3, 0..), x, y, None, None);
+
+        x += text.chars().count();
+        let text = " - Force delete, ";
+        print_text_with_coordinates(Text::new(text), x, y, None, None);
+
+        x += text.chars().count();
+        let text = "<Ctrl-l>";
+        print_text_with_coordinates(Text::new(text).color_range(3, 0..), x, y, None, None);
+
+        x += text.chars().count();
+        let text = " - Open log";
+        print_text_with_coordinates(Text::new(text), x, y, None, None);
     }
 }
 
@@ -484,9 +504,9 @@ impl ZellijPlugin for Git {
 
         print_text_with_coordinates(
             Text::new(format!("Branch: {}|", self.input.clone())),
-            0,
-            0,
-            None,
+            1,
+            1,
+            Some(cols - 3),
             None,
         );
 
