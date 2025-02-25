@@ -54,3 +54,16 @@ Branches can be reloaded with `ctrl+r`
 ### Deleting a branch
 
 The selected branch can be deleted by pressing `ctrl+d`. If the branch cannot be deleted an error will be displayed. A branch can be force deleted with `ctrl+x`
+
+### Open log
+
+Open the log for the selected branch with `ctrl+l`. How to open the log can be configured. See [Configuration](#configuration)
+
+## Configuration
+
+The following configuration options can be provided to the plugin
+
+| argument             | type   | description                                                |
+|----------------------|--------|------------------------------------------------------------|
+| open_log_in_floating | bool   | Controls whether to open the log in a floating pane or not |
+| log_args             | string | Additional arguments to pass when opening the log pane     |

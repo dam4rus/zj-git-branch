@@ -91,6 +91,8 @@ impl BranchesView {
 struct Git {
     inited: bool,
     cwd: Option<PathBuf>,
+    open_log_in_floating: bool,
+    log_args: Vec<String>,
     view: BranchesView,
     filtered_view: Option<BranchesView>,
     render_area: Option<RenderArea>,
@@ -296,12 +298,62 @@ impl Git {
             self.update_filtered_view();
         }
     }
+
+    fn open_log_pane(&self) {
+        let mut args = vec!["log"];
+        args.extend(self.log_args.iter().map(|arg| arg.as_str()));
+
+        let mut command_to_run = CommandToRun::new_with_args("git", args);
+        command_to_run.cwd = self.cwd.clone();
+        if self.open_log_in_floating {
+            open_command_pane_floating(command_to_run, None, BTreeMap::new());
+        } else {
+            open_command_pane(command_to_run, BTreeMap::new());
+        }
+    }
+
+    fn render_help(&self, rows: usize) {
+        let mut x = 0;
+        let y = rows - 2;
+
+        let text = "Ctrl + ";
+        print_text_with_coordinates(Text::new(text), x, y, None, None);
+
+        x += text.len();
+        let text = "<c> Create";
+        print_ribbon_with_coordinates(Text::new(text), x, y, None, None);
+
+        x += text.len() + 4;
+        let text = "<r> Refresh";
+        print_ribbon_with_coordinates(Text::new(text), x, y, None, None);
+
+        x += text.len() + 4;
+        let text = "<d> Delete";
+        print_ribbon_with_coordinates(Text::new(text), x, y, None, None);
+
+        x += text.len() + 4;
+        let text = "<x> Force delete";
+        print_ribbon_with_coordinates(Text::new(text), x, y, None, None);
+
+        x += text.len() + 4;
+        let text = "<l> Log";
+        print_ribbon_with_coordinates(Text::new(text), x, y, None, None);
+    }
 }
 
 impl ZellijPlugin for Git {
-    fn load(&mut self, _configuration: BTreeMap<String, String>) {
+    fn load(&mut self, configuration: BTreeMap<String, String>) {
         let plugin_ids = get_plugin_ids();
         self.cwd = Some(plugin_ids.initial_cwd.clone());
+        self.open_log_in_floating = configuration
+            .get("open_log_in_floating")
+            .map(|value| value.parse::<bool>().unwrap_or(false))
+            .unwrap_or(false);
+        self.log_args = configuration
+            .get("log_args")
+            .map(|value| value.split(" ").map(String::from).collect())
+            .unwrap_or_default();
+
         subscribe(&[EventType::Key, EventType::RunCommandResult]);
         request_permission(&[PermissionType::RunCommands]);
     }
@@ -385,6 +437,10 @@ impl ZellijPlugin for Git {
                         false
                     }
                 }
+                'l' => {
+                    self.open_log_pane();
+                    true
+                }
                 _ => false,
             },
             Event::Key(KeyWithModifier {
@@ -419,7 +475,7 @@ impl ZellijPlugin for Git {
         }
 
         if let Some(message) = &self.error_message {
-            print_text_with_coordinates(Text::new("ERROR").color_range(3, ..), 0, 0, None, None);
+            print_text_with_coordinates(Text::new("ERROR").color_range(2, ..), 0, 0, None, None);
             for (y, line) in message.lines().enumerate() {
                 print_text_with_coordinates(Text::new(line), 0, y + 1, None, None);
             }
@@ -435,7 +491,7 @@ impl ZellijPlugin for Git {
         );
 
         self.render_branch_list(cols, rows);
-        render_help(rows);
+        self.render_help(rows);
         if let Some(cwd) = &self.cwd {
             print_text_with_coordinates(
                 Text::new(cwd.to_string_lossy().to_string()),
@@ -446,25 +502,6 @@ impl ZellijPlugin for Git {
             );
         }
     }
-}
-
-fn render_help(rows: usize) {
-    let mut x = 0;
-    let y = rows - 2;
-    let text = "Ctrl + ";
-    print_text_with_coordinates(Text::new(text), x, y, None, None);
-    x += text.len();
-    let text = "<c> Create";
-    print_ribbon_with_coordinates(Text::new(text), x, y, None, None);
-    x += text.len() + 4;
-    let text = "<r> Refresh";
-    print_ribbon_with_coordinates(Text::new(text), x, y, None, None);
-    x += text.len() + 4;
-    let text = "<d> Delete";
-    print_ribbon_with_coordinates(Text::new(text), x, y, None, None);
-    x += text.len() + 4;
-    let text = "<x> Force delete";
-    print_ribbon_with_coordinates(Text::new(text), x, y, None, None);
 }
 
 register_plugin!(Git);
