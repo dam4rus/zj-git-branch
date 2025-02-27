@@ -3480,7 +3480,7 @@ dependencies = [
 
 [[package]]
 name = "zellij-git-branch"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "nucleo-matcher",
  "zellij-tile",
