@@ -1,5 +1,14 @@
-use std::{cmp::Ordering, collections::BTreeMap, io::BufRead, path::PathBuf};
+use std::{
+    cmp::Ordering,
+    collections::{BTreeMap, HashMap},
+    io::BufRead,
+    path::PathBuf,
+};
 
+use nucleo_matcher::{
+    pattern::{CaseMatching, Normalization, Pattern},
+    Matcher,
+};
 use zellij_tile::{prelude::*, shim::subscribe, ZellijPlugin};
 
 #[derive(Default, Clone)]
@@ -116,13 +125,24 @@ impl Git {
     }
 
     fn update_filtered_view(&mut self) {
-        let visible_branches: Vec<Branch> = self
-            .view
-            .branches
-            .iter()
-            .filter(|branch| branch.name.starts_with(&self.input))
-            .cloned()
-            .collect();
+        let branch_name_map: HashMap<&str, &Branch> = HashMap::from_iter(
+            self.view
+                .branches
+                .iter()
+                .map(|branch| (branch.name.as_str(), branch)),
+        );
+        let mut matcher = Matcher::new(nucleo_matcher::Config::DEFAULT);
+        let visible_branches =
+            Pattern::parse(&self.input, CaseMatching::Smart, Normalization::Smart)
+                .match_list(
+                    self.view.branches.iter().map(|branch| branch.name.as_str()),
+                    &mut matcher,
+                )
+                .iter()
+                .map(|(branch_name, _)| branch_name_map[branch_name])
+                .cloned()
+                .collect();
+
         match &mut self.filtered_view {
             Some(filtered_view) => {
                 filtered_view.branches = visible_branches;
