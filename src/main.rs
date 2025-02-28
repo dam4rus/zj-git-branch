@@ -3,8 +3,18 @@ use std::{
     collections::{BTreeMap, HashMap},
     io::BufRead,
     path::PathBuf,
+    result::Result,
+    str::FromStr,
 };
 
+use nom::{
+    bytes::complete::{tag, take_till1, take_until1},
+    character::complete::{self, hex_digit1, multispace0, not_line_ending},
+    combinator::{map, opt},
+    error::{context, ParseError},
+    sequence::delimited,
+    AsChar, IResult, Parser,
+};
 use nucleo_matcher::{
     pattern::{CaseMatching, Normalization, Pattern},
     Matcher,
@@ -15,21 +25,62 @@ use zellij_tile::{prelude::*, shim::subscribe, ZellijPlugin};
 struct Branch {
     name: String,
     current: bool,
+    commit_sha: String,
+    upstream_branch: Option<String>,
+    commit_message: String,
 }
 
-impl TryFrom<&str> for Branch {
-    type Error = String;
+impl Branch {
+    fn parse_current(value: &str) -> IResult<&str, bool> {
+        context("current", map(opt(complete::char('*')), |c| c.is_some())).parse(value)
+    }
 
-    fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
-        let mut chars = value.chars();
+    fn parse_name(value: &str) -> IResult<&str, String> {
+        context("name", map(take_till1(AsChar::is_space), String::from)).parse(value)
+    }
 
-        let current = chars.next().ok_or_else(|| String::from("value is empty"))? == '*';
-        chars
-            .next()
-            .ok_or_else(|| String::from("value too short"))?;
+    fn parse_commit_sha(value: &str) -> IResult<&str, String> {
+        context("commit_sha", map(hex_digit1, String::from)).parse(value)
+    }
+
+    fn parse_upstream_branch(value: &str) -> IResult<&str, Option<String>> {
+        context(
+            "upstream_branch",
+            opt(delimited(
+                tag("["),
+                map(take_until1("]"), String::from),
+                tag("]"),
+            )),
+        )
+        .parse(value)
+    }
+
+    fn parse_commit_message(value: &str) -> IResult<&str, String> {
+        context("commit_message", map(not_line_ending, String::from)).parse(value)
+    }
+}
+
+impl FromStr for Branch {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (current, name, commit_sha, upstream_branch, commit_message) = (
+            ws(Self::parse_current),
+            ws(Self::parse_name),
+            ws(Self::parse_commit_sha),
+            ws(Self::parse_upstream_branch),
+            Self::parse_commit_message,
+        )
+            .parse(s)
+            .map_err(|e| anyhow!("Failed to parse branch line: {}", e.to_owned()))?
+            .1;
+
         Ok(Self {
-            name: chars.collect(),
+            name,
             current,
+            commit_sha,
+            upstream_branch,
+            commit_message,
         })
     }
 }
@@ -45,7 +96,11 @@ impl RenderArea {
     }
 
     fn branches_view_height(&self) -> usize {
-        self.height - 7
+        self.height - 8
+    }
+
+    fn branches_row_count(&self) -> usize {
+        self.branches_view_height() + 1
     }
 }
 
@@ -164,28 +219,38 @@ impl Git {
     }
 
     fn render_branch_list(&mut self, cols: usize, rows: usize) {
+        let render_area = self.render_area;
         let current_view = self.mut_current_view();
-        let list_items: Vec<NestedListItem> = current_view
+        let header = vec!["name", "upstream", "sha", "message"];
+        let table = current_view
             .branches
             .iter()
             .enumerate()
             .skip(current_view.scroll_offset)
-            .map(|(i, branch)| {
-                let list_item = NestedListItem::new(branch.name.clone());
-                let list_item = if branch.current {
-                    list_item.color_range(2, 0..)
+            .take(render_area.unwrap().branches_row_count())
+            .fold(Table::new().add_row(header), |acc, (i, branch)| {
+                let name = Text::new(branch.name.clone());
+                let name = if branch.current {
+                    name.color_range(2, ..)
                 } else {
-                    list_item
+                    name
                 };
-                if current_view.selected_index == i {
-                    list_item.selected()
+                let row = vec![
+                    name,
+                    Text::new(branch.upstream_branch.clone().unwrap_or(String::from(" ")))
+                        .color_range(1, ..),
+                    Text::new(branch.commit_sha.clone()),
+                    Text::new(branch.commit_message.clone()),
+                ];
+                let row = if current_view.selected_index == i {
+                    row.into_iter().map(|text| text.selected()).collect()
                 } else {
-                    list_item
-                }
-            })
-            .collect();
+                    row
+                };
+                acc.add_styled_row(row)
+            });
 
-        print_nested_list_with_coordinates(list_items, 1, 3, Some(cols - 3), Some(rows - 6));
+        print_table_with_coordinates(table, 1, 3, Some(cols - 3), Some(rows - 6));
     }
 
     fn successful_command_update(
@@ -195,10 +260,10 @@ impl Git {
     ) -> bool {
         match context.get("command").map(String::as_str) {
             Some("list") => {
-                let branches: Result<Vec<Branch>, String> = stdout
+                let branches: Result<Vec<Branch>, anyhow::Error> = stdout
                     .lines()
                     .map_while(Result::ok)
-                    .map(|line| Branch::try_from(line.as_str()))
+                    .map(|line| line.parse())
                     .collect();
 
                 match branches {
@@ -218,7 +283,7 @@ impl Git {
 
                         self.error_message = None;
                     }
-                    Err(err) => self.error_message = Some(err),
+                    Err(err) => self.error_message = Some(err.to_string()),
                 }
                 true
             }
@@ -249,7 +314,7 @@ impl Git {
     }
 
     fn list_branches(&self) {
-        let cmd = &["git", "branch"];
+        let cmd = &["git", "branch", "-vv"];
         let context = BTreeMap::from([(String::from("command"), String::from("list"))]);
         match &self.cwd {
             Some(cwd) => {
@@ -322,6 +387,9 @@ impl Git {
     fn open_log_pane(&self) {
         let mut args = vec!["log"];
         args.extend(self.log_args.iter().map(|arg| arg.as_str()));
+        if let Some(selected_branch) = self.current_view().selected_branch() {
+            args.push(selected_branch.name.as_str());
+        }
 
         let mut command_to_run = CommandToRun::new_with_args("git", args);
         command_to_run.cwd = self.cwd.clone();
@@ -542,6 +610,13 @@ impl ZellijPlugin for Git {
             );
         }
     }
+}
+
+pub fn ws<'a, O, E: ParseError<&'a str>, F>(inner: F) -> impl Parser<&'a str, Output = O, Error = E>
+where
+    F: Parser<&'a str, Output = O, Error = E>,
+{
+    delimited(multispace0, inner, multispace0)
 }
 
 register_plugin!(Git);
