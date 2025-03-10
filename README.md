@@ -29,31 +29,33 @@ The plugin uses the current directory as the git repository. In case a different
 zellij pipe --plugin https://github.com/dam4rus/zj-git-branch/releases/download/v0.1.0/zellij-git-branch.wasm --name cwd "/path/to/directory"
 ```
 
+### Switching between branch types
+
+By default local branches are listed. Pressing the `tab` key switches between listing local and remote branches.
+
 ### Selecting a branch
 
 Up and down arrow keys can be used to select a branch from the list.
 
 ### Filtering branches
 
-Filter branches by simply typing the branch's name.
-
-NOTE: At the moment the branches are filtered if their name does not starts with the input. This will change in the feature to be more intelligent.
+Filter branches by simply typing the branch's name. The plugin uses fuzzy matching to filter branches.
 
 ### Switching to a branch
 
-Pressing `enter` will switch to the selected branch. An error will be displayed if switching has failed for some reason.
+Pressing `enter` with a local branch selected will switch to that branch. Pressing `enter` with a remote branch selected will create a local tracking branch for that specific remote branch. An error will be displayed if switching has failed for some reason.
 
 ### Creating a branch
 
-Pressing `ctrl+c` will create a branch with the input field's value as it's name.
+Pressing `ctrl+c` will create a local branch with the input field's value as it's name. Creating remote branches are not possible at the moment.
 
 ### Refreshing branch
 
-Branches can be reloaded with `ctrl+r`
+Branches can be reloaded with `ctrl+r`.
 
 ### Deleting a branch
 
-The selected branch can be deleted by pressing `ctrl+d`. If the branch cannot be deleted an error will be displayed. A branch can be force deleted with `ctrl+x`
+The selected branch can be deleted by pressing `ctrl+d`. If the branch cannot be deleted an error will be displayed. A branch can be force deleted with `ctrl+x`. Remote branches cannot be deleted at the moment.
 
 ### Open log
 
