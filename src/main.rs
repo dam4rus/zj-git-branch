@@ -296,14 +296,14 @@ impl Git {
                     bare_key: BareKey::Char(c),
                     ..
                 } => {
-                    self.local_branches_tab.push_to_input(c, self.render_area);
+                    self.remote_branches_tab.push_to_input(c, self.render_area);
                     true
                 }
                 KeyWithModifier {
                     bare_key: BareKey::Backspace,
                     ..
                 } => {
-                    self.local_branches_tab.pop_from_input(self.render_area);
+                    self.remote_branches_tab.pop_from_input(self.render_area);
                     true
                 }
                 _ => false,
