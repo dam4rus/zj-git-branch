@@ -1,13 +1,13 @@
 use std::str::FromStr;
 
 use nom::{
+    AsChar, IResult, Parser,
     branch::alt,
-    bytes::complete::{tag, take_till1, take_until1},
+    bytes::complete::{tag, take_till1, take_until1, take_while1},
     character::complete::{self, hex_digit1, multispace0, not_line_ending},
     combinator::{map, opt},
-    error::{context, ParseError},
+    error::{ParseError, context},
     sequence::{delimited, preceded},
-    AsChar, IResult, Parser,
 };
 
 use anyhow::anyhow;
@@ -17,7 +17,21 @@ fn parse_current(value: &str) -> IResult<&str, bool> {
 }
 
 fn parse_name(value: &str) -> IResult<&str, String> {
-    context("name", map(take_till1(AsChar::is_space), String::from)).parse(value)
+    context(
+        "name",
+        map(
+            alt((
+                delimited(
+                    tag("("),
+                    take_while1(|c: char| c.is_ascii_alphanumeric() || c.is_ascii_whitespace()),
+                    tag(")"),
+                ),
+                take_till1(AsChar::is_space),
+            )),
+            String::from,
+        ),
+    )
+    .parse(value)
 }
 
 fn parse_commit_sha(value: &str) -> IResult<&str, String> {
