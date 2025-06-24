@@ -148,166 +148,178 @@ impl Git {
             return true;
         }
         match self.branch_type {
-            BranchType::Local => match key {
-                KeyWithModifier {
-                    bare_key: BareKey::Tab,
-                    ..
-                } => {
-                    self.branch_type = BranchType::Remote;
+            BranchType::Local => self.handle_local_tab_key_input(key),
+            BranchType::Remote => self.handle_remote_tab_key_input(key),
+        }
+    }
+
+    fn handle_local_tab_key_input(&mut self, key: KeyWithModifier) -> bool {
+        match key {
+            KeyWithModifier {
+                bare_key: BareKey::Tab,
+                ..
+            } => {
+                self.branch_type = BranchType::Remote;
+                true
+            }
+            KeyWithModifier {
+                bare_key: BareKey::Down,
+                ..
+            } => {
+                self.local_branches_tab.select_down(self.render_area);
+                true
+            }
+            KeyWithModifier {
+                bare_key: BareKey::Up,
+                ..
+            } => {
+                self.local_branches_tab.select_up(self.render_area);
+                true
+            }
+            KeyWithModifier {
+                bare_key: BareKey::Enter,
+                ..
+            } => match self.local_branches_tab.current_view().selected_branch() {
+                Some(branch) => {
+                    self.switch_to_branch(branch);
                     true
                 }
-                KeyWithModifier {
-                    bare_key: BareKey::Down,
-                    ..
-                } => {
-                    self.local_branches_tab.select_down(self.render_area);
+                None => false,
+            },
+            KeyWithModifier {
+                bare_key: BareKey::Char(c),
+                key_modifiers,
+            } if key_modifiers.contains(&KeyModifier::Ctrl) => match c {
+                'c' => {
+                    self.local_branches_tab.create_branch(self.cwd.as_ref());
                     true
                 }
-                KeyWithModifier {
-                    bare_key: BareKey::Up,
-                    ..
-                } => {
-                    self.local_branches_tab.select_up(self.render_area);
+                'r' => {
+                    self.list_local_branches();
                     true
                 }
-                KeyWithModifier {
-                    bare_key: BareKey::Enter,
-                    ..
-                } => match self.local_branches_tab.current_view().selected_branch() {
-                    Some(branch) => {
-                        self.switch_to_branch(branch);
+                'd' => {
+                    if let Some(selected_branch) =
+                        self.local_branches_tab.current_view().selected_branch()
+                    {
+                        self.delete_branch(&selected_branch.name, false);
                         true
+                    } else {
+                        false
                     }
-                    None => false,
-                },
-                KeyWithModifier {
-                    bare_key: BareKey::Char(c),
-                    key_modifiers,
-                } if key_modifiers.contains(&KeyModifier::Ctrl) => match c {
-                    'c' => {
-                        self.local_branches_tab.create_branch(self.cwd.as_ref());
-                        true
-                    }
-                    'r' => {
-                        self.list_local_branches();
-                        true
-                    }
-                    'd' => {
-                        if let Some(selected_branch) =
-                            self.local_branches_tab.current_view().selected_branch()
-                        {
-                            self.delete_branch(&selected_branch.name, false);
-                            true
-                        } else {
-                            false
-                        }
-                    }
-                    'x' => {
-                        if let Some(selected_branch) =
-                            self.local_branches_tab.current_view().selected_branch()
-                        {
-                            self.delete_branch(&selected_branch.name, true);
-                            true
-                        } else {
-                            false
-                        }
-                    }
-                    'l' => {
-                        if let Some(selected_branch) =
-                            self.local_branches_tab.current_view().selected_branch()
-                        {
-                            self.open_log_pane(&selected_branch.name);
-                            true
-                        } else {
-                            false
-                        }
-                    }
-                    _ => false,
-                },
-                KeyWithModifier {
-                    bare_key: BareKey::Char(c),
-                    ..
-                } => {
-                    self.local_branches_tab.push_to_input(c, self.render_area);
-                    true
                 }
-                KeyWithModifier {
-                    bare_key: BareKey::Backspace,
-                    ..
-                } => {
-                    self.local_branches_tab.pop_from_input(self.render_area);
+                'x' => {
+                    if let Some(selected_branch) =
+                        self.local_branches_tab.current_view().selected_branch()
+                    {
+                        self.delete_branch(&selected_branch.name, true);
+                        true
+                    } else {
+                        false
+                    }
+                }
+                'l' => {
+                    if let Some(selected_branch) =
+                        self.local_branches_tab.current_view().selected_branch()
+                    {
+                        self.open_log_pane(&selected_branch.name);
+                        true
+                    } else {
+                        false
+                    }
+                }
+                'p' => {
+                    self.switch_to_previous_branch();
                     true
                 }
                 _ => false,
             },
-            BranchType::Remote => match key {
-                KeyWithModifier {
-                    bare_key: BareKey::Tab,
-                    ..
-                } => {
-                    self.branch_type = BranchType::Local;
+            KeyWithModifier {
+                bare_key: BareKey::Char(c),
+                ..
+            } => {
+                self.local_branches_tab.push_to_input(c, self.render_area);
+                true
+            }
+            KeyWithModifier {
+                bare_key: BareKey::Backspace,
+                ..
+            } => {
+                self.local_branches_tab.pop_from_input(self.render_area);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    fn handle_remote_tab_key_input(&mut self, key: KeyWithModifier) -> bool {
+        match key {
+            KeyWithModifier {
+                bare_key: BareKey::Tab,
+                ..
+            } => {
+                self.branch_type = BranchType::Local;
+                true
+            }
+            KeyWithModifier {
+                bare_key: BareKey::Down,
+                ..
+            } => {
+                self.remote_branches_tab.select_down(self.render_area);
+                true
+            }
+            KeyWithModifier {
+                bare_key: BareKey::Up,
+                ..
+            } => {
+                self.remote_branches_tab.select_up(self.render_area);
+                true
+            }
+            KeyWithModifier {
+                bare_key: BareKey::Enter,
+                ..
+            } => match self.remote_branches_tab.current_view().selected_branch() {
+                Some(branch) => {
+                    self.track_remote_branch(branch);
                     true
                 }
-                KeyWithModifier {
-                    bare_key: BareKey::Down,
-                    ..
-                } => {
-                    self.remote_branches_tab.select_down(self.render_area);
+                None => false,
+            },
+            KeyWithModifier {
+                bare_key: BareKey::Char(c),
+                key_modifiers,
+            } if key_modifiers.contains(&KeyModifier::Ctrl) => match c {
+                'r' => {
+                    self.list_remote_branches();
                     true
                 }
-                KeyWithModifier {
-                    bare_key: BareKey::Up,
-                    ..
-                } => {
-                    self.remote_branches_tab.select_up(self.render_area);
-                    true
-                }
-                KeyWithModifier {
-                    bare_key: BareKey::Enter,
-                    ..
-                } => match self.remote_branches_tab.current_view().selected_branch() {
-                    Some(branch) => {
-                        self.track_remote_branch(branch);
+                'l' => {
+                    if let Some(selected_branch) =
+                        self.remote_branches_tab.current_view().selected_branch()
+                    {
+                        self.open_log_pane(&selected_branch.name);
                         true
+                    } else {
+                        false
                     }
-                    None => false,
-                },
-                KeyWithModifier {
-                    bare_key: BareKey::Char(c),
-                    key_modifiers,
-                } if key_modifiers.contains(&KeyModifier::Ctrl) => match c {
-                    'r' => {
-                        self.list_remote_branches();
-                        true
-                    }
-                    'l' => {
-                        if let Some(selected_branch) =
-                            self.remote_branches_tab.current_view().selected_branch()
-                        {
-                            self.open_log_pane(&selected_branch.name);
-                            true
-                        } else {
-                            false
-                        }
-                    }
-                    _ => false,
-                },
-                KeyWithModifier {
-                    bare_key: BareKey::Char(c),
-                    ..
-                } => {
-                    self.remote_branches_tab.push_to_input(c, self.render_area);
-                    true
-                }
-                KeyWithModifier {
-                    bare_key: BareKey::Backspace,
-                    ..
-                } => {
-                    self.remote_branches_tab.pop_from_input(self.render_area);
-                    true
                 }
                 _ => false,
             },
+            KeyWithModifier {
+                bare_key: BareKey::Char(c),
+                ..
+            } => {
+                self.remote_branches_tab.push_to_input(c, self.render_area);
+                true
+            }
+            KeyWithModifier {
+                bare_key: BareKey::Backspace,
+                ..
+            } => {
+                self.remote_branches_tab.pop_from_input(self.render_area);
+                true
+            }
+            _ => false,
         }
     }
 
@@ -324,6 +336,21 @@ impl Git {
                 run_command_with_env_variables_and_cwd(cmd, BTreeMap::new(), cwd.clone(), context)
             }
             None => run_command(cmd, context),
+        }
+    }
+
+    fn switch_to_previous_branch(&self) {
+        match &self.cwd {
+            Some(cwd) => run_command_with_env_variables_and_cwd(
+                &["git", "switch", "-"],
+                BTreeMap::new(),
+                cwd.clone(),
+                BTreeMap::from([(String::from("command"), String::from("switch"))]),
+            ),
+            None => run_command(
+                &["git", "switch", "-"],
+                BTreeMap::from([(String::from("command"), String::from("switch"))]),
+            ),
         }
     }
 

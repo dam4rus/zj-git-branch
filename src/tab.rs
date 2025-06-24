@@ -6,8 +6,8 @@ use std::{
 
 use crate::branch::{Branch, LocalBranch, RemoteBranch, RemoteBranchRef};
 use nucleo_matcher::{
-    pattern::{CaseMatching, Normalization, Pattern},
     Matcher,
+    pattern::{CaseMatching, Normalization, Pattern},
 };
 use zellij_tile::prelude::*;
 
@@ -286,7 +286,15 @@ impl Tab<LocalBranch> {
         print_text_with_coordinates(Text::new(text).color_range(3, 0..), x, y, None, None);
 
         x += text.chars().count();
-        let text = " - Open log";
+        let text = " - Open log, ";
+        print_text_with_coordinates(Text::new(text), x, y, None, None);
+
+        x += text.chars().count();
+        let text = "<Ctrl-p>";
+        print_text_with_coordinates(Text::new(text).color_range(3, 0..), x, y, None, None);
+
+        x += text.chars().count();
+        let text = " - Previous branch";
         print_text_with_coordinates(Text::new(text), x, y, None, None);
     }
 
