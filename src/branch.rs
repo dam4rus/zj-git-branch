@@ -21,11 +21,7 @@ fn parse_name(value: &str) -> IResult<&str, String> {
         "name",
         map(
             alt((
-                delimited(
-                    tag("("),
-                    take_while1(|c: char| c.is_ascii_alphanumeric() || c.is_ascii_whitespace()),
-                    tag(")"),
-                ),
+                delimited(tag("("), take_while1(|c: char| c != ')'), tag(")")),
                 take_till1(AsChar::is_space),
             )),
             String::from,
