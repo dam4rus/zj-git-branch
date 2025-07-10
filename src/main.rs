@@ -187,53 +187,66 @@ impl Git {
                 None => false,
             },
             KeyWithModifier {
-                bare_key: BareKey::Char(c),
+                bare_key: BareKey::Char('c'),
                 key_modifiers,
-            } if key_modifiers.contains(&KeyModifier::Ctrl) => match c {
-                'c' => {
-                    self.local_branches_tab.create_branch(self.cwd.as_ref());
+            } if key_modifiers.contains(&KeyModifier::Ctrl) => {
+                self.local_branches_tab.create_branch(self.cwd.as_ref());
+                true
+            }
+
+            KeyWithModifier {
+                bare_key: BareKey::Char('r'),
+                key_modifiers,
+            } if key_modifiers.contains(&KeyModifier::Ctrl) => {
+                self.list_local_branches();
+                true
+            }
+            KeyWithModifier {
+                bare_key: BareKey::Char('d'),
+                key_modifiers,
+            } if key_modifiers.contains(&KeyModifier::Ctrl) => {
+                if let Some(selected_branch) =
+                    self.local_branches_tab.current_view().selected_branch()
+                {
+                    self.delete_branch(&selected_branch.name, false);
                     true
+                } else {
+                    false
                 }
-                'r' => {
-                    self.list_local_branches();
+            }
+            KeyWithModifier {
+                bare_key: BareKey::Char('x'),
+                key_modifiers,
+            } if key_modifiers.contains(&KeyModifier::Ctrl) => {
+                if let Some(selected_branch) =
+                    self.local_branches_tab.current_view().selected_branch()
+                {
+                    self.delete_branch(&selected_branch.name, true);
                     true
+                } else {
+                    false
                 }
-                'd' => {
-                    if let Some(selected_branch) =
-                        self.local_branches_tab.current_view().selected_branch()
-                    {
-                        self.delete_branch(&selected_branch.name, false);
-                        true
-                    } else {
-                        false
-                    }
-                }
-                'x' => {
-                    if let Some(selected_branch) =
-                        self.local_branches_tab.current_view().selected_branch()
-                    {
-                        self.delete_branch(&selected_branch.name, true);
-                        true
-                    } else {
-                        false
-                    }
-                }
-                'l' => {
-                    if let Some(selected_branch) =
-                        self.local_branches_tab.current_view().selected_branch()
-                    {
-                        self.open_log_pane(&selected_branch.name);
-                        true
-                    } else {
-                        false
-                    }
-                }
-                'p' => {
-                    self.switch_to_previous_branch();
+            }
+            KeyWithModifier {
+                bare_key: BareKey::Char('l'),
+                key_modifiers,
+            } if key_modifiers.contains(&KeyModifier::Ctrl) => {
+                if let Some(selected_branch) =
+                    self.local_branches_tab.current_view().selected_branch()
+                {
+                    self.open_log_pane(&selected_branch.name);
                     true
+                } else {
+                    false
                 }
-                _ => false,
-            },
+            }
+            KeyWithModifier {
+                bare_key: BareKey::Char('p'),
+                key_modifiers,
+            } if key_modifiers.contains(&KeyModifier::Ctrl) => {
+                self.switch_to_previous_branch();
+                true
+            }
             KeyWithModifier {
                 bare_key: BareKey::Char(c),
                 ..
@@ -286,25 +299,25 @@ impl Git {
                 None => false,
             },
             KeyWithModifier {
-                bare_key: BareKey::Char(c),
+                bare_key: BareKey::Char('r'),
                 key_modifiers,
-            } if key_modifiers.contains(&KeyModifier::Ctrl) => match c {
-                'r' => {
-                    self.list_remote_branches();
+            } if key_modifiers.contains(&KeyModifier::Ctrl) => {
+                self.list_remote_branches();
+                true
+            }
+            KeyWithModifier {
+                bare_key: BareKey::Char('l'),
+                key_modifiers,
+            } if key_modifiers.contains(&KeyModifier::Ctrl) => {
+                if let Some(selected_branch) =
+                    self.remote_branches_tab.current_view().selected_branch()
+                {
+                    self.open_log_pane(&selected_branch.name);
                     true
+                } else {
+                    false
                 }
-                'l' => {
-                    if let Some(selected_branch) =
-                        self.remote_branches_tab.current_view().selected_branch()
-                    {
-                        self.open_log_pane(&selected_branch.name);
-                        true
-                    } else {
-                        false
-                    }
-                }
-                _ => false,
-            },
+            }
             KeyWithModifier {
                 bare_key: BareKey::Char(c),
                 ..
@@ -340,17 +353,13 @@ impl Git {
     }
 
     fn switch_to_previous_branch(&self) {
+        let cmd = &["git", "switch", "-"];
+        let context = BTreeMap::from([(String::from("command"), String::from("switch"))]);
         match &self.cwd {
-            Some(cwd) => run_command_with_env_variables_and_cwd(
-                &["git", "switch", "-"],
-                BTreeMap::new(),
-                cwd.clone(),
-                BTreeMap::from([(String::from("command"), String::from("switch"))]),
-            ),
-            None => run_command(
-                &["git", "switch", "-"],
-                BTreeMap::from([(String::from("command"), String::from("switch"))]),
-            ),
+            Some(cwd) => {
+                run_command_with_env_variables_and_cwd(cmd, BTreeMap::new(), cwd.clone(), context)
+            }
+            None => run_command(cmd, context),
         }
     }
 
