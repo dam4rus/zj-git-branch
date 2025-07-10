@@ -46,7 +46,7 @@ fn parse_branch_pointer(value: &str) -> IResult<&str, String> {
     .parse(value)
 }
 
-fn parse_upstream_branch(value: &str) -> IResult<&str, Option<String>> {
+fn parse_upstream_info(value: &str) -> IResult<&str, Option<String>> {
     context(
         "upstream_branch",
         opt(delimited(
@@ -67,7 +67,7 @@ pub struct LocalBranch {
     pub name: String,
     pub current: bool,
     pub commit_sha: String,
-    pub upstream_branch: Option<String>,
+    pub upstream_info: Option<UpstreamInfo>,
     pub commit_message: String,
 }
 
@@ -81,22 +81,34 @@ impl FromStr for LocalBranch {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let (current, name, commit_sha, upstream_branch, commit_message) = (
+        let (current, name, commit_sha, upstream_info, commit_message) = (
             ws(parse_current),
             ws(parse_name),
             ws(parse_commit_sha),
-            ws(parse_upstream_branch),
+            ws(parse_upstream_info),
             parse_commit_message,
         )
             .parse(s)
             .map_err(|e| anyhow!("Failed to parse branch line: {}", e.to_owned()))?
             .1;
 
+        let upstream_info = upstream_info.map(|upstream_branch| {
+            upstream_branch
+                .split_once(": ")
+                .map(|(name, relationship)| UpstreamInfo {
+                    name: String::from(name),
+                    relationship: Some(String::from(relationship)),
+                })
+                .unwrap_or(UpstreamInfo {
+                    name: upstream_branch,
+                    relationship: None,
+                })
+        });
         Ok(Self {
             name,
             current,
             commit_sha,
-            upstream_branch,
+            upstream_info,
             commit_message,
         })
     }
@@ -145,18 +157,13 @@ impl FromStr for RemoteBranch {
             .1;
 
         Ok(Self { name, reference })
-        // let (name, commit_sha, commit_message) =
-        //     (ws(parse_name), ws(parse_commit_sha), parse_commit_message)
-        //         .parse(s)
-        //         .map_err(|e| anyhow!("Failed to parse remote branch line: {}", e.to_owned()))?
-        //         .1;
-
-        // Ok(Self {
-        //     name,
-        //     commit_sha,
-        //     commit_message,
-        // })
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct UpstreamInfo {
+    pub name: String,
+    pub relationship: Option<String>,
 }
 
 pub fn ws<'a, O, E: ParseError<&'a str>, F>(inner: F) -> impl Parser<&'a str, Output = O, Error = E>

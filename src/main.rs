@@ -95,7 +95,7 @@ impl Git {
                 }
                 true
             }
-            Some("switch") | Some("create") | Some("delete") => {
+            Some("switch") | Some("create") | Some("delete") | Some("fetch") => {
                 self.list_local_branches();
                 true
             }
@@ -248,6 +248,21 @@ impl Git {
                 true
             }
             KeyWithModifier {
+                bare_key: BareKey::Char('f'),
+                key_modifiers,
+            } if key_modifiers.contains(&KeyModifier::Ctrl) => {
+                if let Some(selected_branch) =
+                    self.local_branches_tab.current_view().selected_branch()
+                {
+                    if let Err(err) = self.fetch(selected_branch) {
+                        self.error_message = Some(err.to_string());
+                    }
+                    true
+                } else {
+                    false
+                }
+            }
+            KeyWithModifier {
                 bare_key: BareKey::Char(c),
                 ..
             } => {
@@ -360,6 +375,36 @@ impl Git {
                 run_command_with_env_variables_and_cwd(cmd, BTreeMap::new(), cwd.clone(), context)
             }
             None => run_command(cmd, context),
+        }
+    }
+
+    fn fetch(&self, branch: &LocalBranch) -> Result<()> {
+        if let Some(upstream_info) = &branch.upstream_info {
+            let Some((remote, remote_ref)) = upstream_info.name.split_once('/') else {
+                bail!("Invalid upstream")
+            };
+            let refspec = format!(
+                "{}:{}",
+                remote_ref
+                    .split_once(':')
+                    .map(|(prefix, _)| prefix)
+                    .unwrap_or(remote_ref),
+                branch.name
+            );
+            let cmd = &["git", "fetch", remote, &refspec];
+            let context = BTreeMap::from([(String::from("command"), String::from("fetch"))]);
+            match &self.cwd {
+                Some(cwd) => run_command_with_env_variables_and_cwd(
+                    cmd,
+                    BTreeMap::new(),
+                    cwd.clone(),
+                    context,
+                ),
+                None => run_command(cmd, context),
+            }
+            Ok(())
+        } else {
+            bail!("Local branch does not track any remote branch")
         }
     }
 

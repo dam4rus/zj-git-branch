@@ -4,7 +4,7 @@ use std::{
     path::Path,
 };
 
-use crate::branch::{Branch, LocalBranch, RemoteBranch, RemoteBranchRef};
+use crate::branch::{Branch, LocalBranch, RemoteBranch, RemoteBranchRef, UpstreamInfo};
 use nucleo_matcher::{
     Matcher,
     pattern::{CaseMatching, Normalization, Pattern},
@@ -314,10 +314,20 @@ impl Tab<LocalBranch> {
                 } else {
                     name
                 };
+                let upstream_text = match &branch.upstream_info {
+                    Some(UpstreamInfo {
+                        name,
+                        relationship: Some(relationship),
+                    }) => format!("{name}: {relationship}"),
+                    Some(UpstreamInfo {
+                        name,
+                        relationship: None,
+                    }) => name.clone(),
+                    None => String::from(" "),
+                };
                 let row = vec![
                     name,
-                    Text::new(branch.upstream_branch.clone().unwrap_or(String::from(" ")))
-                        .color_range(1, ..),
+                    Text::new(upstream_text).color_range(1, ..),
                     Text::new(branch.commit_sha.clone()),
                     Text::new(branch.commit_message.clone()),
                 ];
