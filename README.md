@@ -61,6 +61,14 @@ The selected branch can be deleted by pressing `ctrl+d`. If the branch cannot be
 
 Open the log for the selected branch with `ctrl+l`. How to open the log can be configured. See [Configuration](#configuration)
 
+### Switch to previous branch
+
+The previously checked out branch can be checked out with `ctrl+p`.
+
+### Fetching changes from remote
+
+Changes from a remote branch to the tracking local branch can be fetched with `ctrl+f`.
+
 ## Configuration
 
 The following configuration options can be provided to the plugin
