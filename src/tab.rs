@@ -243,59 +243,22 @@ impl Tab<LocalBranch> {
     }
 
     pub fn render_help(&self, rows: usize) {
-        let mut x = 0;
+        let x = 0;
         let y = rows - 2;
 
-        let text = "Help: ";
-        print_text_with_coordinates(Text::new(text), x, y, None, None);
-
-        x += text.chars().count();
-        let text = "<Ctrl-r>";
-        print_text_with_coordinates(Text::new(text).color_range(3, 0..), x, y, None, None);
-
-        x += text.chars().count();
-        let text = " - Refresh, ";
-        print_text_with_coordinates(Text::new(text), x, y, None, None);
-
-        x += text.chars().count();
-        let text = "<Ctrl-c>";
-        print_text_with_coordinates(Text::new(text).color_range(3, 0..), x, y, None, None);
-
-        x += text.chars().count();
-        let text = " - Create, ";
-        print_text_with_coordinates(Text::new(text), x, y, None, None);
-
-        x += text.chars().count();
-        let text = "<Ctrl-d>";
-        print_text_with_coordinates(Text::new(text).color_range(3, 0..), x, y, None, None);
-
-        x += text.chars().count();
-        let text = " - Delete, ";
-        print_text_with_coordinates(Text::new(text), x, y, None, None);
-
-        x += text.chars().count();
-        let text = "<Ctrl-x>";
-        print_text_with_coordinates(Text::new(text).color_range(3, 0..), x, y, None, None);
-
-        x += text.chars().count();
-        let text = " - Force delete, ";
-        print_text_with_coordinates(Text::new(text), x, y, None, None);
-
-        x += text.chars().count();
-        let text = "<Ctrl-l>";
-        print_text_with_coordinates(Text::new(text).color_range(3, 0..), x, y, None, None);
-
-        x += text.chars().count();
-        let text = " - Open log, ";
-        print_text_with_coordinates(Text::new(text), x, y, None, None);
-
-        x += text.chars().count();
-        let text = "<Ctrl-p>";
-        print_text_with_coordinates(Text::new(text).color_range(3, 0..), x, y, None, None);
-
-        x += text.chars().count();
-        let text = " - Previous branch";
-        print_text_with_coordinates(Text::new(text), x, y, None, None);
+        let (x, y) = print_command_help("<Ctrl-r>", "Refresh", x, y);
+        let (x, y) = print_help_separator(x, y);
+        let (x, y) = print_command_help("<Ctrl-c>", "Create", x, y);
+        let (x, y) = print_help_separator(x, y);
+        let (x, y) = print_command_help("<Ctrl-d>", "Delete", x, y);
+        let (x, y) = print_help_separator(x, y);
+        let (x, y) = print_command_help("<Ctrl-x>", "Force delete", x, y);
+        let (x, y) = print_help_separator(x, y);
+        let (x, y) = print_command_help("<Ctrl-l>", "Open log", x, y);
+        let (x, y) = print_help_separator(x, y);
+        let (x, y) = print_command_help("<Ctrl-p>", "Previous branch", x, y);
+        let (x, y) = print_help_separator(x, y);
+        print_command_help("<Ctrl-f>", "Fetch", x, y);
     }
 
     pub fn render_branch_list(&mut self, render_area: RenderArea) {
@@ -352,27 +315,12 @@ impl Tab<LocalBranch> {
 
 impl Tab<RemoteBranch> {
     pub fn render_help(&self, rows: usize) {
-        let mut x = 0;
+        let x = 0;
         let y = rows - 2;
 
-        let text = "Help: ";
-        print_text_with_coordinates(Text::new(text), x, y, None, None);
-
-        x += text.chars().count();
-        let text = "<Ctrl-r>";
-        print_text_with_coordinates(Text::new(text).color_range(3, 0..), x, y, None, None);
-
-        x += text.chars().count();
-        let text = " - Refresh, ";
-        print_text_with_coordinates(Text::new(text), x, y, None, None);
-
-        x += text.chars().count();
-        let text = "<Ctrl-l>";
-        print_text_with_coordinates(Text::new(text).color_range(3, 0..), x, y, None, None);
-
-        x += text.chars().count();
-        let text = " - Open log";
-        print_text_with_coordinates(Text::new(text), x, y, None, None);
+        let (x, y) = print_command_help("<Ctrl-r>", "Refresh", x, y);
+        let (x, y) = print_help_separator(x, y);
+        print_command_help("<Ctrl-l>", "Open log", x, y);
     }
 
     pub fn render_branch_list(&mut self, render_area: RenderArea) {
@@ -416,4 +364,36 @@ impl Tab<RemoteBranch> {
             branch_list_coordinates.height,
         );
     }
+}
+
+fn print_command_help(
+    key: impl AsRef<str> + ToString,
+    help_text: impl AsRef<str> + ToString,
+    mut x: usize,
+    y: usize,
+) -> (usize, usize) {
+    print_text_with_coordinates(
+        Text::new(key.as_ref()).color_range(3, 0..),
+        x,
+        y,
+        None,
+        None,
+    );
+
+    x += key.as_ref().chars().count();
+    let separator = " - ";
+    print_text_with_coordinates(Text::new(separator), x, y, None, None);
+
+    x += separator.chars().count();
+
+    print_text_with_coordinates(Text::new(help_text.as_ref()), x, y, None, None);
+    x += help_text.as_ref().chars().count();
+    (x, y)
+}
+
+fn print_help_separator(x: usize, y: usize) -> (usize, usize) {
+    let text = ", ";
+    print_text_with_coordinates(Text::new(text), x, y, None, None);
+
+    (x + text.chars().count(), y)
 }
