@@ -3089,6 +3089,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "zellij-mason"
+version = "0.1.0"
+source = "git+https://github.com/dam4rus/zellij-mason#40e78559753d97415cc63b1393f996c6e01426cf"
+dependencies = [
+ "zellij-tile",
+]
+
+[[package]]
 name = "zellij-tile"
 version = "0.42.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3196,5 +3204,6 @@ dependencies = [
  "anyhow",
  "nom 8.0.0",
  "nucleo-matcher",
+ "zellij-mason",
  "zellij-tile",
 ]

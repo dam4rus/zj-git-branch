@@ -4,7 +4,8 @@ mod tab;
 use std::{collections::BTreeMap, io::BufRead, path::PathBuf};
 
 use branch::{LocalBranch, RemoteBranch};
-use tab::{RenderArea, Tab};
+use tab::Tab;
+use zellij_mason::Rect;
 use zellij_tile::prelude::*;
 
 #[derive(Default, Clone, Copy)]
@@ -19,7 +20,6 @@ struct Git {
     cwd: Option<PathBuf>,
     open_log_in_floating: bool,
     log_args: Vec<String>,
-    render_area: Option<RenderArea>,
     branch_type: BranchType,
     local_branches_tab: Tab<LocalBranch>,
     remote_branches_tab: Tab<RemoteBranch>,
@@ -45,20 +45,15 @@ impl Git {
 
                 match branches {
                     Ok(branches) => {
-                        self.local_branches_tab.view.selected_index = branches
-                            .iter()
-                            .position(|branch| branch.current)
-                            .unwrap_or(0);
+                        self.local_branches_tab.view.table_state.select_index(
+                            branches
+                                .iter()
+                                .position(|branch| branch.current)
+                                .unwrap_or(0),
+                        );
                         self.local_branches_tab.view.branches = branches;
-                        if let Some(render_area) = self.render_area {
-                            self.local_branches_tab
-                                .view
-                                .scroll_selected_to_view(render_area);
-                        }
-
                         if !self.local_branches_tab.input.is_empty() {
-                            self.local_branches_tab
-                                .update_filtered_view(self.render_area);
+                            self.local_branches_tab.update_filtered_view();
                         }
 
                         self.error_message = None;
@@ -76,17 +71,9 @@ impl Git {
 
                 match branches {
                     Ok(branches) => {
-                        self.remote_branches_tab.view.selected_index = 0;
                         self.remote_branches_tab.view.branches = branches;
-                        if let Some(render_area) = self.render_area {
-                            self.remote_branches_tab
-                                .view
-                                .scroll_selected_to_view(render_area);
-                        }
-
                         if !self.remote_branches_tab.input.is_empty() {
-                            self.remote_branches_tab
-                                .update_filtered_view(self.render_area);
+                            self.remote_branches_tab.update_filtered_view();
                         }
 
                         self.error_message = None;
@@ -166,14 +153,14 @@ impl Git {
                 bare_key: BareKey::Down,
                 ..
             } => {
-                self.local_branches_tab.select_down(self.render_area);
+                self.local_branches_tab.select_down();
                 true
             }
             KeyWithModifier {
                 bare_key: BareKey::Up,
                 ..
             } => {
-                self.local_branches_tab.select_up(self.render_area);
+                self.local_branches_tab.select_up();
                 true
             }
             KeyWithModifier {
@@ -266,14 +253,14 @@ impl Git {
                 bare_key: BareKey::Char(c),
                 ..
             } => {
-                self.local_branches_tab.push_to_input(c, self.render_area);
+                self.local_branches_tab.push_to_input(c);
                 true
             }
             KeyWithModifier {
                 bare_key: BareKey::Backspace,
                 ..
             } => {
-                self.local_branches_tab.pop_from_input(self.render_area);
+                self.local_branches_tab.pop_from_input();
                 true
             }
             _ => false,
@@ -293,14 +280,14 @@ impl Git {
                 bare_key: BareKey::Down,
                 ..
             } => {
-                self.remote_branches_tab.select_down(self.render_area);
+                self.remote_branches_tab.select_down();
                 true
             }
             KeyWithModifier {
                 bare_key: BareKey::Up,
                 ..
             } => {
-                self.remote_branches_tab.select_up(self.render_area);
+                self.remote_branches_tab.select_up();
                 true
             }
             KeyWithModifier {
@@ -337,14 +324,14 @@ impl Git {
                 bare_key: BareKey::Char(c),
                 ..
             } => {
-                self.remote_branches_tab.push_to_input(c, self.render_area);
+                self.remote_branches_tab.push_to_input(c);
                 true
             }
             KeyWithModifier {
                 bare_key: BareKey::Backspace,
                 ..
             } => {
-                self.remote_branches_tab.pop_from_input(self.render_area);
+                self.remote_branches_tab.pop_from_input();
                 true
             }
             _ => false,
@@ -513,8 +500,6 @@ impl ZellijPlugin for Git {
     }
 
     fn render(&mut self, rows: usize, cols: usize) {
-        let render_area = RenderArea::new(cols, rows);
-        self.render_area = Some(render_area);
         match self.branch_type {
             BranchType::Local => {
                 if !self.local_branches_tab.inited {
@@ -540,8 +525,24 @@ impl ZellijPlugin for Git {
             return;
         }
 
+        const PADDING: usize = 1;
+        const FOOTER_HEIGHT: usize = 2;
+        const TAB_BAR_HEIGHT: usize = 1;
+
         self.render_tab_bar();
-        let input_coordinates = render_area.input_coordinates();
+        let input_rect = Rect {
+            x: PADDING,
+            y: PADDING + TAB_BAR_HEIGHT,
+            width: cols - (2 * PADDING),
+            height: 1,
+        };
+        let table_y = input_rect.y + input_rect.height + PADDING;
+        let table_rect = Rect {
+            x: PADDING,
+            y: table_y,
+            width: cols - (2 * PADDING),
+            height: rows - table_y - PADDING - FOOTER_HEIGHT,
+        };
         match self.branch_type {
             BranchType::Local => {
                 print_text_with_coordinates(
@@ -549,12 +550,12 @@ impl ZellijPlugin for Git {
                         "Branch: {}|",
                         self.local_branches_tab.input.clone()
                     )),
-                    input_coordinates.x,
-                    input_coordinates.y,
-                    input_coordinates.width,
-                    input_coordinates.height,
+                    input_rect.x,
+                    input_rect.y,
+                    Some(input_rect.width),
+                    Some(input_rect.height),
                 );
-                self.local_branches_tab.render_branch_list(render_area);
+                self.local_branches_tab.render_branch_list(table_rect);
                 self.local_branches_tab.render_help(rows);
             }
             BranchType::Remote => {
@@ -563,12 +564,12 @@ impl ZellijPlugin for Git {
                         "Branch: {}|",
                         self.remote_branches_tab.input.clone()
                     )),
-                    input_coordinates.x,
-                    input_coordinates.y,
-                    input_coordinates.width,
-                    input_coordinates.height,
+                    input_rect.x,
+                    input_rect.y,
+                    Some(input_rect.width),
+                    Some(input_rect.height),
                 );
-                self.remote_branches_tab.render_branch_list(render_area);
+                self.remote_branches_tab.render_branch_list(table_rect);
                 self.remote_branches_tab.render_help(rows);
             }
         }
